@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Note, NoteType } from '../types'
 import { NOTE_TYPES, NOTE_TYPE_LABELS } from '../types'
 import { noteHasSupportingQuote } from '../lib/documentHelpers'
-import { copyNotesForWord } from '../lib/formatNotesClipboard'
+import { copyNotesForFigJam, copyNotesForWord } from '../lib/formatNotesClipboard'
 import type { Highlight } from '../types'
 
 interface NotesPanelProps {
@@ -15,6 +15,8 @@ interface NotesPanelProps {
 
 const TYPE_ORDER: NoteType[] = [...NOTE_TYPES] // insight → … → question
 
+type CopiedKind = 'word' | 'table'
+
 export function NotesPanel({
   notes,
   highlights,
@@ -22,7 +24,7 @@ export function NotesPanel({
   onDeleteNote,
   onClose,
 }: NotesPanelProps) {
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<CopiedKind | null>(null)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -34,7 +36,7 @@ export function NotesPanel({
 
   useEffect(() => {
     if (!copied) return
-    const t = window.setTimeout(() => setCopied(false), 1600)
+    const t = window.setTimeout(() => setCopied(null), 1600)
     return () => window.clearTimeout(t)
   }, [copied])
 
@@ -47,7 +49,17 @@ export function NotesPanel({
     if (notes.length === 0) return
     try {
       await copyNotesForWord(notes, highlights)
-      setCopied(true)
+      setCopied('word')
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const onCopyTable = async () => {
+    if (notes.length === 0) return
+    try {
+      await copyNotesForFigJam(notes, highlights)
+      setCopied('table')
     } catch (err) {
       console.error(err)
     }
@@ -59,19 +71,34 @@ export function NotesPanel({
         <h2 className="notes-panel-title">Notes</h2>
         <div className="notes-panel-actions">
           {notes.length > 0 && (
-            <button
-              type="button"
-              className="btn-ghost notes-panel-copy"
-              onClick={() => void onCopy()}
-              aria-label={copied ? 'Copied' : 'Copy notes for Word'}
-              title={copied ? 'Copied' : 'Copy for Word'}
-            >
-              {copied ? (
-                <span className="notes-copy-label">Copied</span>
-              ) : (
-                <CopyIcon />
-              )}
-            </button>
+            <>
+              <button
+                type="button"
+                className="btn-ghost notes-panel-copy"
+                onClick={() => void onCopy()}
+                aria-label={copied === 'word' ? 'Copied' : 'Copy notes for Word'}
+                title={copied === 'word' ? 'Copied' : 'Copy for Word'}
+              >
+                {copied === 'word' ? (
+                  <span className="notes-copy-label">Copied</span>
+                ) : (
+                  <CopyIcon />
+                )}
+              </button>
+              <button
+                type="button"
+                className="btn-ghost notes-panel-copy"
+                onClick={() => void onCopyTable()}
+                aria-label={copied === 'table' ? 'Copied' : 'Copy notes table for FigJam'}
+                title={copied === 'table' ? 'Copied' : 'Copy table for FigJam'}
+              >
+                {copied === 'table' ? (
+                  <span className="notes-copy-label">Copied</span>
+                ) : (
+                  <TableIcon />
+                )}
+              </button>
+            </>
           )}
           <button type="button" className="btn-ghost notes-panel-close" onClick={onClose} aria-label="Close">
             ×
@@ -152,6 +179,22 @@ function CopyIcon() {
         strokeWidth="1.4"
         strokeLinecap="round"
       />
+    </svg>
+  )
+}
+
+function TableIcon() {
+  return (
+    <svg
+      className="notes-copy-icon"
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+    >
+      <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M2.5 6.5h11M2.5 10.5h11M6.5 2.5v11" stroke="currentColor" strokeWidth="1.4" />
     </svg>
   )
 }

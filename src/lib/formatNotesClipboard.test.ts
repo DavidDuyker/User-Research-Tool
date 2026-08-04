@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { formatNotesHtml, formatNotesPlain } from './formatNotesClipboard'
+import {
+  formatNotesHtml,
+  formatNotesPlain,
+  formatNotesTableHtml,
+  formatNotesTableTsv,
+} from './formatNotesClipboard'
 import type { Highlight, Note } from '../types'
 
 const notes: Note[] = [
@@ -56,5 +61,21 @@ describe('formatNotesClipboard', () => {
     expect(html).toContain('<h2>insight</h2>')
     expect(html).toContain('<h2>question</h2>')
     expect(html.indexOf('insight')).toBeLessThan(html.indexOf('question'))
+  })
+
+  it('emits tsv table for figjam paste', () => {
+    const tsv = formatNotesTableTsv(notes, highlights)
+    expect(tsv.startsWith('Type\tNote\tQuote\n')).toBe(true)
+    expect(tsv.indexOf('insight\t')).toBeLessThan(tsv.indexOf('question\t'))
+    expect(tsv).toContain('Users struggle offline\tI struggle when offline · refresh constantly')
+    expect(tsv).toContain('question\tWhat about offline?\tdoes it work offline')
+  })
+
+  it('emits html table for figjam paste', () => {
+    const html = formatNotesTableHtml(notes, highlights)
+    expect(html).toContain('<table>')
+    expect(html).toContain('<th>Type</th><th>Note</th><th>Quote</th>')
+    expect(html).toContain('<td>insight</td><td>Users struggle offline</td>')
+    expect(html).toContain('I struggle when offline · refresh constantly')
   })
 })

@@ -96,3 +96,71 @@ export async function copyNotesForWord(notes: Note[], highlights: Highlight[]): 
 
   await navigator.clipboard.writeText(plain)
 }
+
+/** Flatten cell text for TSV paste (tabs/newlines break spreadsheet columns). */
+function tsvCell(text: string): string {
+  return text.replace(/\t/g, ' ').replace(/\r\n/g, '\n').replace(/\n/g, ' ').trim()
+}
+
+function noteQuoteCell(note: Note, highlights: Highlight[]): string {
+  const hasQuote = noteHasSupportingQuote(note.id, highlights)
+  if (!hasQuote || note.quotes.length === 0) return ''
+  return note.quotes.map((q) => q.trim()).filter(Boolean).join(' · ')
+}
+
+/**
+ * Tab-separated table for FigJam / spreadsheet paste.
+ * Columns: Type | Note | Quote
+ */
+export function formatNotesTableTsv(notes: Note[], highlights: Highlight[]): string {
+  const grouped = groupNotes(notes)
+  if (grouped.length === 0) return ''
+
+  const rows: string[] = [`Type\tNote\tQuote`]
+  for (const { type, items } of grouped) {
+    const typeLabel = NOTE_TYPE_LABELS[type]
+    for (const note of items) {
+      const noteText = note.note.trim() || '(no note text)'
+      const quote = noteQuoteCell(note, highlights)
+      rows.push(`${tsvCell(typeLabel)}\t${tsvCell(noteText)}\t${tsvCell(quote)}`)
+    }
+  }
+  return rows.join('\n') + '\n'
+}
+
+/** HTML table clipboard payload — FigJam/Sheets pick this up as a table. */
+export function formatNotesTableHtml(notes: Note[], highlights: Highlight[]): string {
+  const grouped = groupNotes(notes)
+  if (grouped.length === 0) return ''
+
+  const rows: string[] = [
+    '<tr><th>Type</th><th>Note</th><th>Quote</th></tr>',
+  ]
+  for (const { type, items } of grouped) {
+    const typeLabel = escapeHtml(NOTE_TYPE_LABELS[type])
+    for (const note of items) {
+      const noteText = escapeHtml(note.note.trim() || '(no note text)')
+      const quote = escapeHtml(noteQuoteCell(note, highlights))
+      rows.push(`<tr><td>${typeLabel}</td><td>${noteText}</td><td>${quote}</td></tr>`)
+    }
+  }
+
+  return `<!DOCTYPE html><html><body><table>${rows.join('')}</table></body></html>`
+}
+
+export async function copyNotesForFigJam(notes: Note[], highlights: Highlight[]): Promise<void> {
+  const plain = formatNotesTableTsv(notes, highlights)
+  const html = formatNotesTableHtml(notes, highlights)
+  if (!plain) return
+
+  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+    const item = new ClipboardItem({
+      'text/plain': new Blob([plain], { type: 'text/plain' }),
+      'text/html': new Blob([html], { type: 'text/html' }),
+    })
+    await navigator.clipboard.write([item])
+    return
+  }
+
+  await navigator.clipboard.writeText(plain)
+}
