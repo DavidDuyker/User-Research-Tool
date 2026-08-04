@@ -3,7 +3,7 @@
   --ink-soft: #787774;
   --ink-faint: #9b9a97;
   --paper: #ffffff;
-  --hover: rgb(249, 249, 249);
+  --hover: hsl(0, 0%, 99%);
   --line: rgba(55, 53, 47, 0.09);
   --accent: #2383e2;
   --accent-ink: #1a6ec0;
