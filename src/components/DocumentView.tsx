@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { allocateNoteId } from '../lib/ids'
-import { noteById } from '../lib/documentHelpers'
+import { noteById, removeNoteFromDocument, retargetNoteType } from '../lib/documentHelpers'
 import { ingestMarkdown } from '../lib/parseDocument'
 import { captureBodySelection, selectionRectsRelativeTo } from '../lib/selection'
 import {
@@ -12,6 +12,7 @@ import {
 import type { BodySelection, Document, NoteType, Property } from '../types'
 import { CaptureUI } from './CaptureUI'
 import { NotePopover } from './NotePopover'
+import { NotesPanel } from './NotesPanel'
 import { TranscriptBody } from './TranscriptBody'
 
 interface DocumentViewProps {
@@ -33,16 +34,19 @@ export function DocumentView({ document: doc, onChange, onReset }: DocumentViewP
   docSnapshotRef.current = doc
 
   const [fileLinked, setFileLinked] = useState(false)
+  const [notesOpen, setNotesOpen] = useState(false)
   const [pending, setPending] = useState<BodySelection | null>(null)
   const [phase, setPhase] = useState<CapturePhase>('plus')
   const [draftType, setDraftType] = useState<NoteType | null>(null)
   const [draftNote, setDraftNote] = useState('')
-  const [gutterTop, setGutterTop] = useState(0)
+  const [toolbarPos, setToolbarPos] = useState({ top: 0, centerX: 0 })
   const [entryPos, setEntryPos] = useState({ top: 0, left: 0 })
 
   const [hoverNoteId, setHoverNoteId] = useState<string | null>(null)
   const [hoverAnchor, setHoverAnchor] = useState<DOMRect | null>(null)
   const hoverTimer = useRef<number | null>(null)
+  const hoverMarkRef = useRef<HTMLElement | null>(null)
+  const popoverElRef = useRef<HTMLDivElement | null>(null)
   const popoverPinned = useRef(false)
 
   const isEmpty = !doc.body.trim()
@@ -116,10 +120,16 @@ export function DocumentView({ document: doc, onChange, onReset }: DocumentViewP
     setDraftNote('')
     const rects = selectionRectsRelativeTo(wrap)
     if (rects) {
-      setGutterTop(rects.top)
+      // Toolbar sits just above the selection, centered on it
+      const toolbarGap = 8
+      const estimatedToolbarH = 40
+      setToolbarPos({
+        top: Math.max(0, rects.top - estimatedToolbarH - toolbarGap),
+        centerX: Math.min(Math.max(rects.centerX, 60), wrap.clientWidth - 60),
+      })
       setEntryPos({
-        top: rects.top,
-        left: Math.min(rects.left + 24, wrap.clientWidth - 300),
+        top: rects.bottom + 8,
+        left: Math.min(Math.max(rects.left, 0), wrap.clientWidth - 280),
       })
     }
   }, [phase])
@@ -261,8 +271,8 @@ export function DocumentView({ document: doc, onChange, onReset }: DocumentViewP
       const rects = selectionRectsRelativeTo(wrap)
       if (rects) {
         setEntryPos({
-          top: rects.top,
-          left: Math.min(rects.left + 40, wrap.clientWidth - 300),
+          top: rects.bottom + 8,
+          left: Math.min(Math.max(rects.left, 0), wrap.clientWidth - 280),
         })
       }
     }
@@ -271,6 +281,7 @@ export function DocumentView({ document: doc, onChange, onReset }: DocumentViewP
   const onCommitCapture = () => {
     if (!pending || !draftType) return
     const noteId = allocateNoteId(
+      draftType,
       doc.docId,
       doc.notes.map((n) => n.id),
     )
@@ -303,19 +314,53 @@ export function DocumentView({ document: doc, onChange, onReset }: DocumentViewP
 
   const onMarkEnter = (noteId: string, markEl: HTMLElement) => {
     if (hoverTimer.current) window.clearTimeout(hoverTimer.current)
+    hoverMarkRef.current = markEl
     setHoverNoteId(noteId)
     setHoverAnchor(markEl.getBoundingClientRect())
   }
 
-  const onMarkLeave = () => {
+  const scheduleHoverClose = useCallback(() => {
     if (popoverPinned.current) return
     hoverTimer.current = window.setTimeout(() => {
       if (!popoverPinned.current) {
+        hoverMarkRef.current = null
         setHoverNoteId(null)
         setHoverAnchor(null)
       }
     }, 120)
-  }
+  }, [])
+
+  const pointInRect = (x: number, y: number, rect: DOMRectReadOnly) =>
+    x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+
+  // Keep popover open while pointer is in the highlight's full bounding box
+  // (including gaps between wrapped lines) or over the popover itself.
+  useEffect(() => {
+    if (!hoverNoteId) return
+
+    const onMove = (e: MouseEvent) => {
+      if (popoverPinned.current) {
+        if (hoverTimer.current) window.clearTimeout(hoverTimer.current)
+        return
+      }
+
+      const mark = hoverMarkRef.current
+      const inMark = mark ? pointInRect(e.clientX, e.clientY, mark.getBoundingClientRect()) : false
+      const pop = popoverElRef.current
+      const inPop = pop ? pointInRect(e.clientX, e.clientY, pop.getBoundingClientRect()) : false
+
+      if (inMark || inPop) {
+        if (hoverTimer.current) window.clearTimeout(hoverTimer.current)
+        if (mark) setHoverAnchor(mark.getBoundingClientRect())
+        return
+      }
+
+      scheduleHoverClose()
+    }
+
+    window.addEventListener('mousemove', onMove)
+    return () => window.removeEventListener('mousemove', onMove)
+  }, [hoverNoteId, scheduleHoverClose])
 
   const hoverNote = hoverNoteId ? noteById(doc.notes, hoverNoteId) : null
   const containerRect = wrapRef.current?.getBoundingClientRect() ?? null
@@ -414,14 +459,13 @@ export function DocumentView({ document: doc, onChange, onReset }: DocumentViewP
                     : null
                 }
                 onMarkEnter={onMarkEnter}
-                onMarkLeave={onMarkLeave}
                 onMouseUp={updateSelectionChrome}
               />
 
               {pending && (
                 <CaptureUI
                   selection={pending}
-                  gutterTop={gutterTop}
+                  toolbarPos={toolbarPos}
                   entryPos={entryPos}
                   phase={phase}
                   draftType={draftType}
@@ -440,7 +484,25 @@ export function DocumentView({ document: doc, onChange, onReset }: DocumentViewP
                   highlights={doc.highlights}
                   anchorRect={hoverAnchor}
                   containerRect={containerRect}
+                  popoverRef={popoverElRef}
                   onChange={(patch) => {
+                    if (patch.type && patch.type !== hoverNote.type) {
+                      const { notes, highlights, newId } = retargetNoteType(
+                        doc.notes,
+                        doc.highlights,
+                        hoverNote.id,
+                        patch.type,
+                      )
+                      setHoverNoteId(newId)
+                      commit({
+                        ...doc,
+                        notes: notes.map((n) =>
+                          n.id === newId ? { ...n, note: patch.note ?? n.note } : n,
+                        ),
+                        highlights,
+                      })
+                      return
+                    }
                     commit({
                       ...doc,
                       notes: doc.notes.map((n) =>
@@ -448,8 +510,17 @@ export function DocumentView({ document: doc, onChange, onReset }: DocumentViewP
                       ),
                     })
                   }}
+                  onDelete={() => {
+                    const next = removeNoteFromDocument(doc.notes, doc.highlights, hoverNote.id)
+                    popoverPinned.current = false
+                    hoverMarkRef.current = null
+                    setHoverNoteId(null)
+                    setHoverAnchor(null)
+                    commit({ ...doc, ...next })
+                  }}
                   onClose={() => {
                     popoverPinned.current = false
+                    hoverMarkRef.current = null
                     setHoverNoteId(null)
                     setHoverAnchor(null)
                   }}
@@ -459,7 +530,7 @@ export function DocumentView({ document: doc, onChange, onReset }: DocumentViewP
                   }}
                   onMouseLeave={() => {
                     popoverPinned.current = false
-                    onMarkLeave()
+                    scheduleHoverClose()
                   }}
                 />
               )}
@@ -467,6 +538,46 @@ export function DocumentView({ document: doc, onChange, onReset }: DocumentViewP
           </>
         )}
       </div>
+
+      {!isEmpty && (
+        <>
+          <button
+            type="button"
+            className={`notes-fab${notesOpen ? ' notes-fab-active' : ''}`}
+            onClick={() => setNotesOpen((o) => !o)}
+            aria-expanded={notesOpen}
+            aria-controls="notes-panel"
+          >
+            Notes{doc.notes.length > 0 ? ` · ${doc.notes.length}` : ''}
+          </button>
+
+          {notesOpen && (
+            <div id="notes-panel" className="notes-panel-shell">
+              <NotesPanel
+                notes={doc.notes}
+                highlights={doc.highlights}
+                onChangeNote={(id, patch) => {
+                  commit({
+                    ...doc,
+                    notes: doc.notes.map((n) => (n.id === id ? { ...n, ...patch } : n)),
+                  })
+                }}
+                onDeleteNote={(id) => {
+                  const next = removeNoteFromDocument(doc.notes, doc.highlights, id)
+                  if (hoverNoteId === id) {
+                    popoverPinned.current = false
+                    hoverMarkRef.current = null
+                    setHoverNoteId(null)
+                    setHoverAnchor(null)
+                  }
+                  commit({ ...doc, ...next })
+                }}
+                onClose={() => setNotesOpen(false)}
+              />
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }

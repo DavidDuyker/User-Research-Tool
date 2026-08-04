@@ -1,10 +1,19 @@
-import { createDocId, isValidNoteId, parseNoteId } from './ids'
+import { createDocId, formatNoteId, isValidNoteId, parseNoteId } from './ids'
 import type { Document, Highlight, Note, NoteType, Property } from '../types'
 import { NOTE_TYPES } from '../types'
 
-const HIGHLIGHT_RE = /==([\s\S]*?)==((?:\s*\^[a-z0-9]{3}-\d{1,4})+)/gi
-const REF_RE = /\^([a-z0-9]{3}-\d{1,4})/gi
-const NOTE_HEADER_RE = /^###\s+([a-z0-9]{3}-\d{1,4})\s*$/i
+const TYPE_ALT = NOTE_TYPES.join('|')
+/** Modern: ^insight-x7k-8392 ; legacy: ^x7k-8392 */
+const HIGHLIGHT_RE = new RegExp(
+  `==([\\s\\S]*?)==((?:\\s*\\^(?:(?:${TYPE_ALT})-)?[a-z0-9]{3}-\\d{1,4})+)`,
+  'gi',
+)
+const REF_RE = new RegExp(`\\^((?:(?:${TYPE_ALT})-)?[a-z0-9]{3}-\\d{1,4})`, 'gi')
+/** Modern unlabeled ref line, or legacy ### heading */
+const NOTE_REF_RE = new RegExp(
+  `^(?:###\\s+)?((?:${TYPE_ALT})-[a-z0-9]{3}-\\d{1,4}|[a-z0-9]{3}-\\d{1,4})\\s*$`,
+  'i',
+)
 const NOTE_TYPES_SET = new Set<string>(NOTE_TYPES)
 
 function newPropId(): string {
@@ -93,74 +102,133 @@ function parseNoteType(raw: string): NoteType {
 }
 
 function parseNotesSection(section: string): Note[] {
-  const lines = section.replace(/^\s*##\s+Notes\s*$/im, '').split(/\r?\n/)
+  const lines = section
+    .replace(/^\s*##?\s*Notes\s*$/im, '')
+    .split(/\r?\n/)
   const notes: Note[] = []
   let current: Note | null = null
   let inQuotes = false
+  let collectingNoteText = false
+  /** Accumulator for legacy multiline "…\n…" quotes (before \n encoding). */
+  let openQuoteParts: string[] | null = null
+
+  const flushOpenQuote = () => {
+    if (!current || !openQuoteParts) return
+    const joined = openQuoteParts.join('\n')
+    const q = decodeQuoteValue(joined)
+    if (q) current.quotes.push(q)
+    openQuoteParts = null
+  }
 
   const flush = () => {
+    flushOpenQuote()
     if (current) {
+      // Normalize legacy ids to type-doc-numeric
+      const parsed = parseNoteId(current.id)
+      if (parsed) {
+        current.id = formatNoteId(current.type, parsed.docId, parsed.numericId)
+      }
+      current.note = current.note.trim()
       notes.push(current)
       current = null
     }
     inQuotes = false
+    collectingNoteText = false
+  }
+
+  const startNote = (rawId: string) => {
+    flush()
+    const parsed = parseNoteId(rawId)
+    current = {
+      id: rawId.toLowerCase(),
+      type: parsed?.type ?? 'insight',
+      note: '',
+      quotes: [],
+    }
+    collectingNoteText = true
+  }
+
+  const pushQuoteLine = (rawLine: string) => {
+    if (!current) return
+    const trimmed = rawLine.trim()
+    if (!trimmed) return
+
+    if (openQuoteParts) {
+      openQuoteParts.push(rawLine.replace(/\r$/, ''))
+      if (endsQuotedString(trimmed)) {
+        flushOpenQuote()
+      }
+      return
+    }
+
+    if (trimmed.startsWith('"') && !endsQuotedString(trimmed)) {
+      openQuoteParts = [rawLine.replace(/\r$/, '')]
+      return
+    }
+
+    const q = decodeQuoteValue(trimmed)
+    if (q) current.quotes.push(q)
   }
 
   for (const line of lines) {
-    const header = NOTE_HEADER_RE.exec(line.trim())
-    if (header) {
-      flush()
-      current = {
-        id: header[1]!.toLowerCase(),
-        type: 'insight',
-        note: '',
-        quotes: [],
-      }
+    const trimmed = line.trim()
+    const refMatch = NOTE_REF_RE.exec(trimmed)
+    if (refMatch && !openQuoteParts) {
+      startNote(refMatch[1]!)
       continue
     }
 
     if (!current) continue
+    // Local alias — closures mutate `current`, which confuses control-flow narrowing
+    const active: Note = current
 
-    const trimmed = line.trim()
-
-    if (/^quote:\s*$/i.test(trimmed) || /^quote:\s*/i.test(trimmed) && trimmed.toLowerCase() === 'quote:') {
+    if (/^quote:\s*$/i.test(trimmed)) {
+      flushOpenQuote()
       inQuotes = true
-      const inline = trimmed.slice(trimmed.indexOf(':') + 1).trim()
-      if (inline) {
-        const q = unwrapQuoted(inline)
-        if (q) current.quotes.push(q)
-      }
+      collectingNoteText = false
+      continue
+    }
+
+    const quoteInline = /^quote:\s*(.+)$/i.exec(trimmed)
+    if (quoteInline) {
+      flushOpenQuote()
+      inQuotes = true
+      collectingNoteText = false
+      pushQuoteLine(quoteInline[1]!)
       continue
     }
 
     if (inQuotes) {
-      if (!trimmed) continue
-      if (/^(type|note)\s*:/i.test(trimmed)) {
+      if (/^(type|note)\s*:/i.test(trimmed) && !openQuoteParts) {
         inQuotes = false
       } else {
-        const q = unwrapQuoted(trimmed)
-        if (q) current.quotes.push(q)
+        pushQuoteLine(line)
         continue
       }
     }
 
+    // Legacy labeled fields
     const typeMatch = /^type:\s*(.+)$/i.exec(trimmed)
     if (typeMatch) {
-      current.type = parseNoteType(typeMatch[1]!)
+      collectingNoteText = false
+      active.type = parseNoteType(typeMatch[1]!)
       continue
     }
 
     const noteMatch = /^note:\s*(.*)$/i.exec(trimmed)
     if (noteMatch) {
-      current.note = noteMatch[1]!.trim()
+      collectingNoteText = false
+      active.note = noteMatch[1]!.trim()
       continue
     }
 
-    const quoteField = /^quote:\s*(.+)$/i.exec(trimmed)
-    if (quoteField) {
-      inQuotes = true
-      const q = unwrapQuoted(quoteField[1]!)
-      if (q) current.quotes.push(q)
+    // Modern: unlabeled note body until quote: or next ref
+    if (collectingNoteText) {
+      if (!trimmed) {
+        if (active.note) active.note += '\n'
+        continue
+      }
+      active.note = active.note ? `${active.note}\n${trimmed}` : trimmed
     }
   }
 
@@ -168,16 +236,46 @@ function parseNotesSection(section: string): Note[] {
   return notes
 }
 
-function unwrapQuoted(raw: string): string {
-  const t = raw.trim()
-  const m = /^"(.*)"$/.exec(t)
-  if (m) return m[1]!
-  if (t.startsWith('"') && t.endsWith('"') && t.length >= 2) return t.slice(1, -1)
-  return t
+/** True if string ends with an unescaped closing ". */
+function endsQuotedString(s: string): boolean {
+  if (!s.endsWith('"')) return false
+  let escapes = 0
+  for (let i = s.length - 2; i >= 0 && s[i] === '\\'; i--) escapes++
+  return escapes % 2 === 0
+}
+
+/**
+ * Decode a quote token from the file.
+ * Prefers "text\\nwith lines" single-line form; also accepts bare text.
+ */
+export function decodeQuoteValue(raw: string): string {
+  let t = raw.trim()
+  if (t.startsWith('"') && endsQuotedString(t) && t.length >= 2) {
+    t = t.slice(1, -1)
+  }
+  // Unescape \\ then \" then \n — process carefully
+  let out = ''
+  for (let i = 0; i < t.length; i++) {
+    if (t[i] === '\\' && i + 1 < t.length) {
+      const n = t[i + 1]
+      if (n === 'n') {
+        out += '\n'
+        i++
+        continue
+      }
+      if (n === '"' || n === '\\') {
+        out += n
+        i++
+        continue
+      }
+    }
+    out += t[i]
+  }
+  return out
 }
 
 function isNotesSection(text: string): boolean {
-  return /^##\s+Notes\b/m.test(text.trimStart())
+  return /^##?\s*Notes\b/m.test(text.trimStart()) || /^Notes\s*$/m.test(text.trimStart())
 }
 
 function splitDocument(markdown: string): { header: string; bodyMarked: string; notesSection: string } {
@@ -222,9 +320,11 @@ function splitDocument(markdown: string): { header: string; bodyMarked: string; 
 export function looksLikeDocumentMarkdown(text: string): boolean {
   const t = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').trim()
   if (!t) return false
-  if (/^##\s+Notes\b/m.test(t)) return true
-  // Highlight refs imply our format
-  if (/==[\s\S]*?==\s*\^[a-z0-9]{3}-\d{1,4}/i.test(t)) return true
+  if (/^##?\s*Notes\b/m.test(t) || /^Notes\s*$/m.test(t)) return true
+  // Highlight refs imply our format (modern or legacy)
+  if (/==[\s\S]*?==\s*\^(?:(?:insight|painpoint|opportunity|question)-)?[a-z0-9]{3}-\d{1,4}/i.test(t)) {
+    return true
+  }
   // Our saved docs always have two --- section dividers (props | notes | body)
   const parts = t.split(/\n[ \t]*---[ \t]*\n/)
   if (parts.length >= 3) return true
@@ -272,11 +372,15 @@ export function parseDocument(markdown: string, opts?: { filename?: string }): D
 
   const filename = opts?.filename ?? titleToFilename(title)
 
-  // Drop invalid note ids from highlights
-  const cleanHighlights = highlights.map((h) => ({
-    ...h,
-    noteIds: h.noteIds.filter(isValidNoteId),
-  })).filter((h) => h.noteIds.length > 0)
+  // Align highlight refs to note ids (upgrade legacy x7k-1 → insight-x7k-1)
+  const cleanHighlights = highlights
+    .map((h) => ({
+      ...h,
+      noteIds: h.noteIds
+        .map((id) => resolveNoteRef(id, notes))
+        .filter((id): id is string => Boolean(id)),
+    }))
+    .filter((h) => h.noteIds.length > 0)
 
   return {
     docId,
@@ -289,6 +393,20 @@ export function parseDocument(markdown: string, opts?: { filename?: string }): D
     markdown: '',
     updatedAt: new Date().toISOString(),
   }
+}
+
+function resolveNoteRef(id: string, notes: Note[]): string | null {
+  const lower = id.toLowerCase()
+  if (notes.some((n) => n.id === lower)) return lower
+  if (!isValidNoteId(lower)) return null
+  const parsed = parseNoteId(lower)
+  if (!parsed) return null
+  const match = notes.find((n) => {
+    const np = parseNoteId(n.id)
+    return np && np.docId === parsed.docId && np.numericId === parsed.numericId
+  })
+  if (match) return match.id
+  return formatNoteId(parsed.type, parsed.docId, parsed.numericId)
 }
 
 /** Ingest raw paste: treat as body only, fresh doc id, no notes. */

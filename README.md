@@ -27,20 +27,19 @@ Topbar: filename + status, **Open**, **New**.
 ```markdown
 title: Document title
 session type: interview
----
-## Notes
 
-### abc-1234
-type: insight
-note: …
-quote:
-"…"
 ---
-transcript body with ==highlighted spans==^abc-1234
+Notes
+
+insight-abc-1234
+The note text is the focus
+quote:
+"supporting excerpt"
+---
+transcript body with ==highlighted spans==^insight-abc-1234
 ```
 
-Notes sit above the transcript in the file (handy in a markdown editor). In the app, notes still appear on highlight hover.
-## Scripts
+Notes sit above the transcript (no markdown headers). Each note starts with a `{type}-{doc}-{n}` ref line, then the note body, then quotes. In the app, notes still appear on highlight hover.## Scripts
 
 - `npm run dev`
 - `npm run build`

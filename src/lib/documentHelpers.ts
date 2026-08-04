@@ -1,4 +1,5 @@
 import type { Highlight, Note, NoteType } from '../types'
+import { retargetNoteId } from './ids'
 
 export function noteById(notes: Note[], id: string): Note | undefined {
   return notes.find((n) => n.id === id)
@@ -20,6 +21,50 @@ export function highlightPrimaryType(
 
 export function noteHasSupportingQuote(noteId: string, highlights: Highlight[]): boolean {
   return highlights.some((h) => h.noteIds.includes(noteId))
+}
+
+/** Remove a note and detach/drop its highlights. */
+export function removeNoteFromDocument(
+  notes: Note[],
+  highlights: Highlight[],
+  noteId: string,
+): { notes: Note[]; highlights: Highlight[] } {
+  return {
+    notes: notes.filter((n) => n.id !== noteId),
+    highlights: highlights
+      .map((h) => ({
+        ...h,
+        noteIds: h.noteIds.filter((id) => id !== noteId),
+      }))
+      .filter((h) => h.noteIds.length > 0),
+  }
+}
+
+/** Change a note's type and rewrite its id + highlight refs. */
+export function retargetNoteType(
+  notes: Note[],
+  highlights: Highlight[],
+  noteId: string,
+  newType: NoteType,
+): { notes: Note[]; highlights: Highlight[]; newId: string } {
+  const note = notes.find((n) => n.id === noteId)
+  if (!note) {
+    return { notes, highlights, newId: noteId }
+  }
+  if (note.type === newType && note.id.startsWith(`${newType}-`)) {
+    return { notes, highlights, newId: noteId }
+  }
+  const newId = retargetNoteId(noteId, newType)
+  return {
+    newId,
+    notes: notes.map((n) =>
+      n.id === noteId ? { ...n, id: newId, type: newType } : n,
+    ),
+    highlights: highlights.map((h) => ({
+      ...h,
+      noteIds: h.noteIds.map((id) => (id === noteId ? newId : id)),
+    })),
+  }
 }
 
 export function segmentsForBody(

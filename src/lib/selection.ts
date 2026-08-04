@@ -50,17 +50,22 @@ function offsetInBody(root: HTMLElement, node: Node, offset: number): number | n
 
 export function selectionRectsRelativeTo(
   anchor: HTMLElement,
-): { top: number; left: number; bottom: number; height: number } | null {
+): { top: number; left: number; bottom: number; height: number; width: number; centerX: number } | null {
   const sel = window.getSelection()
   if (!sel || sel.rangeCount === 0) return null
   const range = sel.getRangeAt(0)
   const rect = range.getBoundingClientRect()
   if (rect.width === 0 && rect.height === 0) return null
   const parent = anchor.getBoundingClientRect()
+  const top = rect.top - parent.top + anchor.scrollTop
+  const left = rect.left - parent.left + anchor.scrollLeft
+  const width = rect.width
   return {
-    top: rect.top - parent.top + anchor.scrollTop,
-    left: rect.left - parent.left + anchor.scrollLeft,
+    top,
+    left,
     bottom: rect.bottom - parent.top + anchor.scrollTop,
     height: rect.height,
+    width,
+    centerX: left + width / 2,
   }
 }

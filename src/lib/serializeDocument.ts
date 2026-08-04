@@ -37,18 +37,20 @@ function serializeBody(body: string, highlights: Highlight[]): string {
 }
 
 function serializeNotes(notes: Note[]): string {
-  if (notes.length === 0) return '## Notes\n'
-  const parts = ['## Notes', '']
+  if (notes.length === 0) return 'Notes\n'
+  const parts = ['Notes', '']
   for (const note of notes) {
-    parts.push(`### ${note.id}`)
-    parts.push(`type: ${note.type}`)
-    parts.push(`note: ${note.note}`)
+    // Unlabeled ref: type-docId-number — note text is the focus
+    parts.push(note.id)
+    if (note.note.trim()) {
+      parts.push(note.note.trim())
+    }
     parts.push('quote:')
     if (note.quotes.length === 0) {
       // orphan / empty
     } else {
       for (const q of note.quotes) {
-        parts.push(`"${q.replace(/"/g, '\\"')}"`)
+        parts.push(encodeQuoteLine(q))
       }
     }
     parts.push('')
@@ -56,12 +58,22 @@ function serializeNotes(notes: Note[]): string {
   return parts.join('\n').trimEnd() + '\n'
 }
 
+/** Encode a single quote as one file line: "text with\\nline breaks". */
+export function encodeQuoteLine(quote: string): string {
+  const escaped = quote
+    .replace(/\r\n/g, '\n')
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+  return `"${escaped}"`
+}
+
 export function serializeDocument(doc: Pick<Document, 'title' | 'properties' | 'body' | 'highlights' | 'notes'>): string {
   const header = serializeProperties(doc.title, doc.properties)
   const body = serializeBody(doc.body, doc.highlights)
   const notes = serializeNotes(doc.notes)
-  // Notes above transcript so MD editors surface synthesis first
-  return `${header}\n---\n${notes}---\n${body}\n`
+  // Blank line between metadata and first --- divider
+  return `${header}\n\n---\n${notes}---\n${body}\n`
 }
 
 export function withLiveMarkdown<T extends Pick<Document, 'title' | 'properties' | 'body' | 'highlights' | 'notes'>>(

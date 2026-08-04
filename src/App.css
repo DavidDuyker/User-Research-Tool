@@ -3,7 +3,7 @@
   --ink-soft: #787774;
   --ink-faint: #9b9a97;
   --paper: #ffffff;
-  --hover: rgba(55, 53, 47, 0.06);
+  --hover: rgb(249, 249, 249);
   --line: rgba(55, 53, 47, 0.09);
   --accent: #2383e2;
   --accent-ink: #1a6ec0;
@@ -13,9 +13,9 @@
   --hl-question: #e3e2e0;
   --hl-multi: #e8e0f0;
   --hl-pending: #efefef;
-  --page-width: 720px;
-  --gutter: 120px;
-  --font-ui: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial,
+  --page-width: 56ch;
+  --gutter: 1rem;
+  --font-ui: ui-serif,ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial,
     sans-serif;
 }
 
@@ -181,6 +181,7 @@ button {
 .add-property {
   justify-self: start;
   border: 0;
+  font-size: 0.9rem;
   background: transparent;
   color: var(--ink-faint);
   margin-top: 0.25rem;
@@ -289,43 +290,84 @@ button {
   background: var(--hl-pending);
 }
 
-.capture-gutter {
+.capture-toolbar {
   position: absolute;
-  left: calc(-1 * var(--gutter) + 4px);
-  width: calc(var(--gutter) - 12px);
   z-index: 5;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  pointer-events: none;
 }
 
-.capture-plus {
-  border: 0;
-  background: #ecebea;
-  color: var(--ink-soft);
-  font-size: 12px;
-  font-weight: 500;
-  padding: 0.25rem 0.45rem;
-  border-radius: 4px;
+.capture-toolbar > * {
+  pointer-events: auto;
+}
+
+.capture-add-btn {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 550;
+  padding: 0.55rem 1rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   white-space: nowrap;
 }
 
-.capture-plus:hover {
-  background: #e3e2e0;
-  color: var(--ink);
+.capture-add-btn:hover {
+  background: var(--hover);
+}
+
+.capture-add-btn-open {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+
+.capture-add-btn-open:hover {
+  background: #2f2e2a;
 }
 
 .capture-types {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
   align-items: stretch;
+  gap: 0.25rem;
+  min-width: 7.5rem;
+  padding: 0.35rem;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  animation: capture-types-in 140ms ease-out;
+  transform-origin: top center;
+}
+
+@keyframes capture-types-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .capture-type {
   border: 0;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 550;
+  padding: 0.4rem 0.65rem;
   text-align: center;
+}
+
+.capture-type:hover {
+  filter: brightness(0.97);
 }
 
 .capture-type-insight {
@@ -382,6 +424,7 @@ button {
   font-size: 0.78rem;
   line-height: 1.4;
   color: var(--ink-soft);
+  white-space: pre-wrap;
 }
 
 .type-pill {
@@ -424,6 +467,30 @@ button {
   gap: 0.4rem;
 }
 
+.note-popover-head,
+.notes-panel-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+
+.notes-panel-item-head {
+  justify-content: flex-end;
+}
+
+.note-delete {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-faint);
+  padding: 0.15rem 0.35rem;
+}
+
+.note-delete:hover {
+  color: #c44;
+  background: rgba(196, 68, 68, 0.08);
+}
+
 .type-select {
   border: 0;
   appearance: none;
@@ -443,6 +510,155 @@ button {
   font-style: italic;
 }
 
+.notes-fab {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 30;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 550;
+  padding: 0.55rem 1rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.notes-fab:hover {
+  background: var(--hover);
+}
+
+.notes-fab-active {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+
+.notes-fab-active:hover {
+  background: #2f2e2a;
+}
+
+.notes-panel-shell {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 4.25rem;
+  z-index: 29;
+  width: min(360px, calc(100vw - 2rem));
+  max-height: min(70vh, 560px);
+}
+
+.notes-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.notes-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+.notes-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.notes-panel-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0.25rem;
+  color: var(--ink-soft);
+}
+
+.notes-panel-copy:hover {
+  color: var(--ink);
+}
+
+.notes-copy-icon {
+  display: block;
+}
+
+.notes-copy-label {
+  font-size: 0.75rem;
+  font-weight: 550;
+  color: var(--accent-ink);
+  padding: 0 0.25rem;
+}
+
+.notes-panel-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.notes-panel-close {
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 0.15rem 0.4rem;
+}
+
+.notes-panel-empty {
+  margin: 0;
+  padding: 1.25rem 0.85rem;
+  color: var(--ink-faint);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.notes-panel-body {
+  overflow: auto;
+  padding: 0.65rem 0.75rem 0.85rem;
+  display: grid;
+  gap: 1.15rem;
+}
+
+.notes-panel-group-label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.notes-panel-count {
+  color: var(--ink-faint);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.notes-panel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.notes-panel-item {
+  padding: 0.5rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  display: grid;
+  gap: 0.35rem;
+  background: rgba(250, 250, 249, 0.6);
+}
+
 @media (max-width: 720px) {
   :root {
     --gutter: 0px;
@@ -456,19 +672,18 @@ button {
     margin-left: 0;
   }
 
-  .capture-gutter {
-    left: 0;
-    top: auto !important;
-    position: relative;
-    width: 100%;
-    margin-bottom: 0.5rem;
-  }
-
   .property-row {
     grid-template-columns: 1fr auto;
   }
 
   .property-key {
     grid-column: 1 / -1;
+  }
+
+  .notes-panel-shell {
+    left: 1rem;
+    right: 1rem;
+    width: auto;
+    bottom: 4.5rem;
   }
 }

@@ -4,8 +4,8 @@ import { NOTE_TYPES, NOTE_TYPE_LABELS } from '../types'
 
 interface CaptureUIProps {
   selection: BodySelection
-  /** Position relative to page container */
-  gutterTop: number
+  /** Toolbar anchor relative to transcript wrap (top edge above selection, horizontal center) */
+  toolbarPos: { top: number; centerX: number }
   entryPos: { top: number; left: number }
   phase: 'plus' | 'picking' | 'drafting'
   draftType: NoteType | null
@@ -19,7 +19,7 @@ interface CaptureUIProps {
 
 export function CaptureUI({
   selection,
-  gutterTop,
+  toolbarPos,
   entryPos,
   phase,
   draftType,
@@ -31,6 +31,7 @@ export function CaptureUI({
   onCancel,
 }: CaptureUIProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const toolbarRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (phase === 'drafting') inputRef.current?.focus()
@@ -38,7 +39,13 @@ export function CaptureUI({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel()
+      if (e.key === 'Escape') {
+        if (phase === 'picking') {
+          onPhase('plus')
+          return
+        }
+        onCancel()
+      }
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && phase === 'drafting') {
         e.preventDefault()
         onCommit()
@@ -46,43 +53,56 @@ export function CaptureUI({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onCancel, onCommit, phase])
+  }, [onCancel, onCommit, onPhase, phase])
+
+  useEffect(() => {
+    if (phase !== 'picking') return
+    const onDown = (e: MouseEvent) => {
+      if (toolbarRef.current?.contains(e.target as Node)) return
+      onPhase('plus')
+    }
+    window.addEventListener('mousedown', onDown)
+    return () => window.removeEventListener('mousedown', onDown)
+  }, [phase, onPhase])
 
   return (
     <>
-      <div
-        className={`capture-gutter${phase !== 'plus' ? ' capture-gutter-open' : ''}`}
-        style={{ top: gutterTop }}
-        onMouseEnter={() => {
-          if (phase === 'plus') onPhase('picking')
-        }}
-        onMouseLeave={() => {
-          if (phase === 'picking') onPhase('plus')
-        }}
-      >
-        {phase === 'plus' || phase === 'picking' ? (
-          <div className="capture-plus-wrap">
-            {phase === 'plus' ? (
-              <button type="button" className="capture-plus" aria-label="Add insight">
-                + add insight
-              </button>
-            ) : (
-              <div className="capture-types">
-                {NOTE_TYPES.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    className={`capture-type capture-type-${t}`}
-                    onClick={() => onPickType(t)}
-                  >
-                    {NOTE_TYPE_LABELS[t]}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : null}
-      </div>
+      {(phase === 'plus' || phase === 'picking') && (
+        <div
+          ref={toolbarRef}
+          className="capture-toolbar"
+          style={{
+            top: toolbarPos.top,
+            left: toolbarPos.centerX,
+          }}
+        >
+          <button
+            type="button"
+            className={`capture-add-btn${phase === 'picking' ? ' capture-add-btn-open' : ''}`}
+            aria-label="Add note"
+            aria-expanded={phase === 'picking'}
+            onClick={() => onPhase(phase === 'picking' ? 'plus' : 'picking')}
+          >
+            + add note
+          </button>
+
+          {phase === 'picking' && (
+            <div className="capture-types" role="menu">
+              {NOTE_TYPES.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  role="menuitem"
+                  className={`capture-type capture-type-${t}`}
+                  onClick={() => onPickType(t)}
+                >
+                  {NOTE_TYPE_LABELS[t]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {phase === 'drafting' && draftType ? (
         <div

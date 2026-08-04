@@ -8,7 +8,6 @@ interface TranscriptBodyProps {
   bodyRef: React.RefObject<HTMLDivElement | null>
   pending?: { start: number; end: number; type: NoteType | null } | null
   onMarkEnter: (noteId: string, markEl: HTMLElement) => void
-  onMarkLeave: () => void
   onMouseUp: () => void
 }
 
@@ -19,7 +18,6 @@ export function TranscriptBody({
   bodyRef,
   pending,
   onMarkEnter,
-  onMarkLeave,
   onMouseUp,
 }: TranscriptBodyProps) {
   const displayHighlights = pending
@@ -56,7 +54,6 @@ export function TranscriptBody({
                 onMarkEnter(primaryId, e.currentTarget)
               }
             }}
-            onMouseLeave={onMarkLeave}
           >
             {seg.text}
           </mark>
