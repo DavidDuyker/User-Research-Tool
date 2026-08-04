@@ -39,7 +39,15 @@ quote:
 transcript body with ==highlighted spans==^insight-abc-1234
 ```
 
-Notes sit above the transcript (no markdown headers). Each note starts with a `{type}-{doc}-{n}` ref line, then the note body, then quotes. In the app, notes still appear on highlight hover.## Scripts
+Notes sit above the transcript (no markdown headers). Each note starts with a `{type}-{doc}-{n}` ref line, then the note body, then quotes. In the app, notes still appear on highlight hover.
+
+## Deploy
+
+Pushes to `main` build and publish via GitHub Actions to GitHub Pages:
+
+https://davidduyker.github.io/User-Research-Tool/
+
+## Scripts
 
 - `npm run dev`
 - `npm run build`
