@@ -1,4 +1,4 @@
-export type NoteType = 'insight' | 'painpoint' | 'opportunity' | 'question'
+export type NoteType = 'insight' | 'painpoint' | 'opportunity' | 'question' | 'validation'
 
 export interface Property {
   id: string
@@ -39,11 +39,12 @@ export interface BodySelection {
   text: string
 }
 
-export const NOTE_TYPES: NoteType[] = ['insight', 'painpoint', 'opportunity', 'question']
+export const NOTE_TYPES: NoteType[] = ['insight', 'painpoint', 'opportunity', 'question', 'validation']
 
 export const NOTE_TYPE_LABELS: Record<NoteType, string> = {
   insight: 'insight',
   painpoint: 'painpoint',
   opportunity: 'opportunity',
   question: 'question',
+  validation: 'validation',
 }

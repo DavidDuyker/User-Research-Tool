@@ -3,6 +3,10 @@ import type { Document, Highlight, Note, NoteType, Property } from '../types'
 import { NOTE_TYPES } from '../types'
 
 const TYPE_ALT = NOTE_TYPES.join('|')
+const HIGHLIGHT_REF_RE = new RegExp(
+  `==[\\s\\S]*?==\\s*\\^(?:(?:${TYPE_ALT})-)?[a-z0-9]{3}-\\d{1,4}`,
+  'i',
+)
 /** Modern: ^insight-x7k-8392 ; legacy: ^x7k-8392 */
 const HIGHLIGHT_RE = new RegExp(
   `==([\\s\\S]*?)==((?:\\s*\\^(?:(?:${TYPE_ALT})-)?[a-z0-9]{3}-\\d{1,4})+)`,
@@ -322,7 +326,7 @@ export function looksLikeDocumentMarkdown(text: string): boolean {
   if (!t) return false
   if (/^##?\s*Notes\b/m.test(t) || /^Notes\s*$/m.test(t)) return true
   // Highlight refs imply our format (modern or legacy)
-  if (/==[\s\S]*?==\s*\^(?:(?:insight|painpoint|opportunity|question)-)?[a-z0-9]{3}-\d{1,4}/i.test(t)) {
+  if (HIGHLIGHT_REF_RE.test(t)) {
     return true
   }
   // Our saved docs always have two --- section dividers (props | notes | body)

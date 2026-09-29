@@ -7,6 +7,7 @@ interface TranscriptBodyProps {
   notes: Note[]
   bodyRef: React.RefObject<HTMLDivElement | null>
   pending?: { start: number; end: number; type: NoteType | null } | null
+  previewNoteId?: string | null
   onMarkEnter: (noteId: string, markEl: HTMLElement) => void
   onMouseUp: () => void
 }
@@ -17,6 +18,7 @@ export function TranscriptBody({
   notes,
   bodyRef,
   pending,
+  previewNoteId = null,
   onMarkEnter,
   onMouseUp,
 }: TranscriptBodyProps) {
@@ -43,11 +45,12 @@ export function TranscriptBody({
           ? (pending?.type ?? null)
           : highlightPrimaryType(h, notes)
         const primaryId = h.noteIds.find((id) => id !== '__pending__') ?? h.noteIds[0]
+        const isPreview = Boolean(previewNoteId && h.noteIds.includes(previewNoteId))
 
         return (
           <mark
             key={i}
-            className={`hl hl-${type ?? 'insight'}${isPending ? ' hl-pending' : ''}`}
+            className={`hl hl-${type ?? 'insight'}${isPending ? ' hl-pending' : ''}${isPreview ? ' hl-preview' : ''}`}
             data-note-ids={h.noteIds.join(' ')}
             onMouseEnter={(e) => {
               if (primaryId && primaryId !== '__pending__') {
