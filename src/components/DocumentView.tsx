@@ -44,6 +44,7 @@ export function DocumentView({ document: doc, onChange, onReset }: DocumentViewP
 
   const [hoverNoteId, setHoverNoteId] = useState<string | null>(null)
   const [hoverAnchor, setHoverAnchor] = useState<DOMRect | null>(null)
+  const [panelHoverNoteId, setPanelHoverNoteId] = useState<string | null>(null)
   const hoverTimer = useRef<number | null>(null)
   const hoverMarkRef = useRef<HTMLElement | null>(null)
   const popoverElRef = useRef<HTMLDivElement | null>(null)
@@ -319,6 +320,16 @@ export function DocumentView({ document: doc, onChange, onReset }: DocumentViewP
     setHoverAnchor(markEl.getBoundingClientRect())
   }
 
+  const onJumpToNote = useCallback((noteId: string) => {
+    const root = bodyRef.current
+    if (!root) return
+    const mark = root.querySelector(
+      `mark[data-note-ids~="${CSS.escape(noteId)}"]`,
+    ) as HTMLElement | null
+    if (!mark) return
+    mark.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [])
+
   const scheduleHoverClose = useCallback(() => {
     if (popoverPinned.current) return
     hoverTimer.current = window.setTimeout(() => {
@@ -458,6 +469,7 @@ export function DocumentView({ document: doc, onChange, onReset }: DocumentViewP
                     ? { start: pending.start, end: pending.end, type: draftType }
                     : null
                 }
+                previewNoteId={panelHoverNoteId}
                 onMarkEnter={onMarkEnter}
                 onMouseUp={updateSelectionChrome}
               />
@@ -544,7 +556,12 @@ export function DocumentView({ document: doc, onChange, onReset }: DocumentViewP
           <button
             type="button"
             className={`notes-fab${notesOpen ? ' notes-fab-active' : ''}`}
-            onClick={() => setNotesOpen((o) => !o)}
+            onClick={() => {
+              setNotesOpen((o) => {
+                if (o) setPanelHoverNoteId(null)
+                return !o
+              })
+            }}
             aria-expanded={notesOpen}
             aria-controls="notes-panel"
           >
@@ -572,7 +589,12 @@ export function DocumentView({ document: doc, onChange, onReset }: DocumentViewP
                   }
                   commit({ ...doc, ...next })
                 }}
-                onClose={() => setNotesOpen(false)}
+                onJumpToNote={onJumpToNote}
+                onHoverNote={setPanelHoverNoteId}
+                onClose={() => {
+                  setPanelHoverNoteId(null)
+                  setNotesOpen(false)
+                }}
               />
             </div>
           )}

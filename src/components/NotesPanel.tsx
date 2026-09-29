@@ -10,6 +10,8 @@ interface NotesPanelProps {
   highlights: Highlight[]
   onChangeNote: (id: string, patch: Partial<Pick<Note, 'note' | 'type'>>) => void
   onDeleteNote: (id: string) => void
+  onJumpToNote: (noteId: string) => void
+  onHoverNote: (noteId: string | null) => void
   onClose: () => void
 }
 
@@ -22,6 +24,8 @@ export function NotesPanel({
   highlights,
   onChangeNote,
   onDeleteNote,
+  onJumpToNote,
+  onHoverNote,
   onClose,
 }: NotesPanelProps) {
   const [copied, setCopied] = useState<CopiedKind | null>(null)
@@ -120,8 +124,30 @@ export function NotesPanel({
                 {items.map((note) => {
                   const hasQuote = noteHasSupportingQuote(note.id, highlights)
                   return (
-                    <li key={note.id} className="notes-panel-item">
+                    <li
+                      key={note.id}
+                      className={`notes-panel-item${hasQuote ? ' notes-panel-item-jumpable' : ''}`}
+                      onMouseEnter={hasQuote ? () => onHoverNote(note.id) : undefined}
+                      onMouseLeave={hasQuote ? () => onHoverNote(null) : undefined}
+                      onClick={
+                        hasQuote
+                          ? (e) => {
+                              const target = e.target as HTMLElement
+                              if (
+                                target.closest('textarea') ||
+                                target.closest('button') ||
+                                target.closest('a')
+                              ) {
+                                return
+                              }
+                              onJumpToNote(note.id)
+                            }
+                          : undefined
+                      }
+                      title={hasQuote ? 'Jump to quote in transcript' : undefined}
+                    >
                       <div className="notes-panel-item-head">
+                        <h4 className="notes-panel-item-id">{note.id}</h4>
                         <button
                           type="button"
                           className="btn-ghost note-delete"
@@ -142,7 +168,7 @@ export function NotesPanel({
                       <div className="note-popover-quotes">
                         {hasQuote && note.quotes.length > 0 ? (
                           note.quotes.map((q, i) => (
-                            <blockquote key={i} className="note-quote">
+                            <blockquote key={i} className="note-quote note-quote-jump">
                               “{q}”
                             </blockquote>
                           ))
